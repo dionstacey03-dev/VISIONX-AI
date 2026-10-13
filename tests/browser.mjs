@@ -19,6 +19,7 @@ try {
   await page.goto(url);
   await page.getByRole('heading', { name: 'See it. Identify it.' }).waitFor();
   assert.equal(await page.locator('#clear').isDisabled(), true);
+  assert.equal(await page.locator('#capture').isDisabled(), true);
   await page.locator('#threshold').fill('75');
   await page.locator('#threshold').dispatchEvent('input');
   assert.equal(await page.locator('#threshold-value').textContent(), '75%');
@@ -38,6 +39,7 @@ try {
   assert.equal(await page.locator('#retry').isVisible(), true);
   assert.equal(await page.locator('#upload').isEnabled(), true);
   assert.equal(await page.locator('#photo').isVisible(), true);
+  assert.equal(await page.locator('#capture').isDisabled(), true);
   console.log('PASS: image upload, clear error, and retry control when model cannot load'); passed++;
 
   if (modelAvailable) {
@@ -57,10 +59,57 @@ try {
       return canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).data.some((value) => value !== 0);
     }), true);
     console.log('PASS: real photograph identifies people and draws bounding boxes'); passed++;
+    await page.locator('#mode').selectOption('fast');
+    await page.waitForFunction(() => !document.querySelector('#mode').disabled);
+    assert.match(await page.locator('#results').textContent(), /person/);
+    async function saveAndInspect() {
+      const downloaded = page.waitForEvent('download');
+      await page.locator('#capture').click();
+      const download = await downloaded;
+      assert.match(download.suggestedFilename(), /^visionx-.*\.png$/);
+      const path = new URL('../test-results/snapshot.png', import.meta.url).pathname;
+      await download.saveAs(path);
+      const { readFileSync } = await import('node:fs');
+      return page.evaluate(async (base64) => {
+        const image = new Image();
+        image.src = `data:image/png;base64,${base64}`;
+        await image.decode();
+        const canvas = document.createElement('canvas');
+        canvas.width = image.naturalWidth; canvas.height = image.naturalHeight;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(image, 0, 0);
+        const pixels = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+        let labeled = false;
+        for (let i = 0; i < pixels.length; i += 4) {
+          if (pixels[i] === 168 && pixels[i + 1] === 240 && pixels[i + 2] === 128 && pixels[i + 3] === 255) { labeled = true; break; }
+        }
+        return { width: canvas.width, height: canvas.height, labeled };
+      }, readFileSync(path).toString('base64'));
+    }
+    const fastSnapshot = await saveAndInspect();
+    assert.equal(fastSnapshot.width, 480);
+    assert.equal(fastSnapshot.labeled, true);
+    await page.locator('#mode').selectOption('accurate');
+    await page.waitForFunction(() => !document.querySelector('#mode').disabled);
+    const accurateSnapshot = await saveAndInspect();
+    assert.equal(accurateSnapshot.width, 600);
+    assert.equal(accurateSnapshot.height, 399);
+    assert.equal(accurateSnapshot.labeled, true);
+    console.log('PASS: mode changes reanalyze images and snapshots contain labels at the selected resolution'); passed++;
     await page.screenshot({ path: new URL('../test-results/detection.png', import.meta.url).pathname, fullPage: true });
     await page.locator('#camera').click();
     await page.waitForFunction(() => document.querySelector('#status-chip').textContent === 'LIVE', { timeout: 120_000 });
     await page.waitForFunction(() => document.querySelector('#latency').textContent !== '—');
+    await page.waitForFunction(() => document.querySelector('#fps').textContent.includes('fps'), { timeout: 120_000 });
+    assert.ok(parseFloat(await page.locator('#fps').textContent()) > 0);
+    const deviceId = await page.locator('#camera-select option').nth(1).getAttribute('value');
+    await page.evaluate(() => { window.previousTrack = document.querySelector('#video').srcObject.getVideoTracks()[0]; });
+    await page.locator('#camera-select').selectOption(deviceId);
+    await page.waitForFunction(() => document.querySelector('#status-chip').textContent === 'LIVE' && !document.querySelector('#camera').disabled);
+    assert.equal(await page.evaluate(() => window.previousTrack.readyState), 'ended');
+    assert.equal(await page.evaluate(() => document.querySelector('#video').srcObject.getVideoTracks()[0].getSettings().deviceId), deviceId);
+    await page.waitForFunction(() => document.querySelector('#fps').textContent.includes('fps'), { timeout: 120_000 });
+    console.log('PASS: camera selection restarts on the chosen device, releases the old stream, and measures detection FPS'); passed++;
     await page.locator('#camera').click();
     assert.equal(await page.locator('#status-chip').textContent(), 'PAUSED');
     assert.equal(await page.evaluate(() => document.querySelector('#video').srcObject), null);
@@ -73,6 +122,7 @@ try {
   assert.equal(await page.locator('#empty-state').isVisible(), true);
   assert.equal(await page.locator('#count').textContent(), '0');
   assert.equal(await page.locator('#clear').isDisabled(), true);
+  assert.equal(await page.locator('#capture').isDisabled(), true);
   await page.locator('#file').setInputFiles({ name: 'broken.png', mimeType: 'image/png', buffer: Buffer.from('invalid image') });
   await page.waitForFunction(() => document.querySelector('#message').textContent.includes('could not be decoded'));
   console.log('PASS: clear/reset and invalid-image handling'); passed++;

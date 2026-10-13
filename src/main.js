@@ -15,13 +15,14 @@ document.querySelector('#app').innerHTML = `
           <div id="empty-state"><div class="view-icon">⌖</div><h2>A new perspective awaits</h2><p>Start your camera or upload an image<br />to discover the objects around you.</p><span class="frame-corner corner-tl"></span><span class="frame-corner corner-tr"></span><span class="frame-corner corner-bl"></span><span class="frame-corner corner-br"></span></div>
           <span id="viewport-badge" hidden>LOCAL INFERENCE</span>
         </div>
-        <div class="controls"><button id="camera" class="primary">◉ <span>Start camera</span></button><button id="upload" class="secondary">↑ Upload image</button><input id="file" type="file" accept="image/*" hidden /><button id="clear" class="text-button" disabled>Clear</button><span class="control-note">Your images stay on your device</span></div>
+        <div class="controls"><button id="camera" class="primary">◉ <span>Start camera</span></button><button id="upload" class="secondary">↑ Upload image</button><button id="capture" class="secondary" disabled>↓ Save snapshot</button><input id="file" type="file" accept="image/*" hidden /><button id="clear" class="text-button" disabled>Clear</button><span class="control-note">Your images stay on your device</span></div>
         <div id="message" role="status" aria-live="polite">Ready when you are. Camera access requires HTTPS or localhost.</div>
         <button id="retry" class="text-button" hidden>Retry model loading</button>
       </section>
       <aside class="inspector">
         <section class="results-panel"><div class="section-heading"><h2>Detected objects</h2><span id="count">0</span></div><p class="section-note">What your camera sees, at a glance.</p><div id="results"><div class="no-results"><span>◎</span><p>No objects identified yet</p><small>Results will appear here as you scan.</small></div></div></section>
         <section class="settings-panel"><p class="eyebrow">DETECTION SETTINGS</p><label for="threshold">Confidence threshold <output id="threshold-value">50%</output></label><input id="threshold" type="range" min="20" max="95" value="50" step="5" /><div class="range-labels"><span>More detections</span><span>Higher certainty</span></div><div class="stats"><div><span>Inference time</span><strong id="latency">—</strong></div><div><span>Processing</span><strong id="backend">On device</strong></div></div></section>
+        <section class="settings-panel"><p class="eyebrow">CAMERA & PERFORMANCE</p><label for="camera-select">Camera</label><select id="camera-select"><option value="">Automatic (prefer rear camera)</option></select><label for="mode">Detection mode</label><select id="mode"><option value="fast">Fast · lower resolution</option><option value="accurate" selected>Accurate · higher resolution</option></select><p class="section-note">Fast uses up to 480 pixels; Accurate uses up to 960. Both use the same model.</p><div class="stats"><div><span>Detection FPS</span><strong id="fps">—</strong></div></div></section>
         <div class="tip"><span>✦</span><p><strong>A little light goes a long way.</strong><br />Use good lighting and keep objects in frame for clearer results.</p></div>
       </aside>
     </div>
@@ -43,6 +44,21 @@ let busy = false;
 const inferenceCanvas = document.createElement('canvas');
 const inferenceContext = inferenceCanvas.getContext('2d');
 let inferenceQueue = Promise.resolve();
+const resultFrame = document.createElement('canvas');
+resultFrame.width = 0;
+let frameTimes = [];
+
+async function refreshCameras() {
+  if (!navigator.mediaDevices?.enumerateDevices) return;
+  try {
+    const devices = (await navigator.mediaDevices.enumerateDevices()).filter((device) => device.kind === 'videoinput');
+    const select = $('#camera-select');
+    const selected = select.value;
+    select.replaceChildren(new Option('Automatic (prefer rear camera)', ''));
+    devices.filter((device) => device.deviceId).forEach((device, index) => select.add(new Option(device.label || `Camera ${index + 1}`, device.deviceId)));
+    select.value = devices.some((device) => device.deviceId === selected) ? selected : '';
+  } catch { /* Camera permission may be required before devices can be listed. */ }
+}
 
 function message(text, error = false) {
   $('#message').textContent = text;
@@ -80,6 +96,9 @@ function setBusy(value) {
   $('#upload').disabled = value;
   $('#clear').disabled = value || !currentSource;
   $('#retry').disabled = value;
+  $('#camera-select').disabled = value;
+  $('#mode').disabled = value;
+  $('#capture').disabled = value || !resultFrame.width;
 }
 
 function stopCamera() {
@@ -89,6 +108,8 @@ function stopCamera() {
   video.srcObject = null;
   $('#camera span').textContent = 'Start camera';
   $('#live-dot').classList.remove('active');
+  frameTimes = [];
+  $('#fps').textContent = '—';
 }
 
 function showSource(source) {
@@ -104,8 +125,8 @@ function showSource(source) {
 
 function render() {
   if (!currentSource) return;
-  const width = currentSource === video ? video.videoWidth : photo.naturalWidth;
-  const height = currentSource === video ? video.videoHeight : photo.naturalHeight;
+  const width = currentSource === video ? (video.videoWidth || canvas.width) : photo.naturalWidth;
+  const height = currentSource === video ? (video.videoHeight || canvas.height) : photo.naturalHeight;
   if (!width || !height) return;
   canvas.width = width;
   canvas.height = height;
@@ -162,16 +183,26 @@ function infer(source, token) {
     const start = performance.now();
     const width = source === video ? video.videoWidth : photo.naturalWidth;
     const height = source === video ? video.videoHeight : photo.naturalHeight;
-    const ratio = Math.min(1, 960 / Math.max(width, height));
+    const maxSize = $('#mode').value === 'fast' ? 480 : 960;
+    const ratio = Math.min(1, maxSize / Math.max(width, height));
     inferenceCanvas.width = Math.max(1, Math.round(width * ratio));
     inferenceCanvas.height = Math.max(1, Math.round(height * ratio));
     inferenceContext.drawImage(source, 0, 0, inferenceCanvas.width, inferenceCanvas.height);
     const predictions = await model.detect(inferenceCanvas, 20, 0.2);
     if (token !== generation) return;
+    resultFrame.width = inferenceCanvas.width;
+    resultFrame.height = inferenceCanvas.height;
+    resultFrame.getContext('2d').drawImage(inferenceCanvas, 0, 0);
     // Inference dimensions are independent of the image's CSS display size.
     lastPredictions = predictions.map((prediction) => ({ ...prediction, bbox: prediction.bbox.map((value, index) => value * (index % 2 === 0 ? width / inferenceCanvas.width : height / inferenceCanvas.height)) }));
     $('#latency').textContent = `${Math.round(performance.now() - start)} ms`;
     render();
+    $('#capture').disabled = busy;
+    if (source === video) {
+      frameTimes.push(performance.now());
+      frameTimes = frameTimes.slice(-10);
+      if (frameTimes.length > 1) $('#fps').textContent = `${((frameTimes.length - 1) * 1000 / (frameTimes.at(-1) - frameTimes[0])).toFixed(1)} fps`;
+    }
   });
   inferenceQueue = task.catch(() => {});
   return task;
@@ -190,18 +221,17 @@ async function loop(token) {
   }
 }
 
-$('#camera').addEventListener('click', async () => {
-  if (stream) {
-    stopCamera();
-    $('#status-chip').textContent = 'PAUSED';
-    message('Camera stopped. The last detections remain visible.');
-    return;
-  }
+async function startCamera() {
   setBusy(true);
+  stopCamera();
+  resultFrame.width = 0;
+  $('#capture').disabled = true;
   let captured;
   try {
     if (!navigator.mediaDevices?.getUserMedia) throw new Error('Camera access requires HTTPS or localhost and a supported browser.');
-    captured = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false });
+    const deviceId = $('#camera-select').value;
+    captured = await navigator.mediaDevices.getUserMedia({ video: { ...(deviceId ? { deviceId: { exact: deviceId } } : { facingMode: { ideal: 'environment' } }), width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false });
+    await refreshCameras();
     await loadModel();
     stopCamera();
     stream = captured;
@@ -229,6 +259,47 @@ $('#camera').addEventListener('click', async () => {
     else $('#status-chip').textContent = 'STANDBY';
     message(error.name === 'NotAllowedError' ? 'Camera permission was denied. Allow camera access in your browser or upload an image.' : error.name === 'NotFoundError' ? 'No camera found. Connect a camera or upload an image.' : error.message, true);
   } finally { setBusy(false); }
+}
+
+$('#camera').addEventListener('click', async () => {
+  if (stream) {
+    stopCamera();
+    $('#status-chip').textContent = 'PAUSED';
+    message('Camera stopped. You can save the last analyzed frame.');
+  } else await startCamera();
+});
+$('#camera-select').addEventListener('change', async () => { if (stream && !busy) await startCamera(); });
+navigator.mediaDevices?.addEventListener('devicechange', refreshCameras);
+refreshCameras();
+
+$('#mode').addEventListener('change', async () => {
+  frameTimes = [];
+  $('#fps').textContent = '—';
+  if (currentSource !== photo || !model || busy) return;
+  setBusy(true);
+  try { await infer(photo, generation); message('Image reanalyzed using the selected detection mode.'); }
+  catch (error) { message(error.message, true); }
+  finally { setBusy(false); }
+});
+
+$('#capture').addEventListener('click', () => {
+  if (!resultFrame.width || busy) return;
+  const snapshot = document.createElement('canvas');
+  snapshot.width = resultFrame.width;
+  snapshot.height = resultFrame.height;
+  const ctx = snapshot.getContext('2d');
+  ctx.drawImage(resultFrame, 0, 0);
+  ctx.drawImage(canvas, 0, 0, snapshot.width, snapshot.height);
+  snapshot.toBlob((blob) => {
+    if (!blob) { message('Snapshot could not be saved. Try again.', true); return; }
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `visionx-${new Date().toISOString().replace(/[:.]/g, '-')}.png`;
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 10_000);
+    message('Snapshot saved with the visible labels and bounding boxes.');
+  }, 'image/png');
 });
 
 $('#upload').addEventListener('click', () => $('#file').click());
@@ -240,6 +311,7 @@ $('#file').addEventListener('change', async (event) => {
   if (file.size > 20 * 1024 * 1024) { message('Choose an image smaller than 20 MB.', true); return; }
   setBusy(true);
   stopCamera();
+  resultFrame.width = 0;
   const url = URL.createObjectURL(file);
   try {
     photo.src = url;
@@ -274,6 +346,8 @@ $('#clear').addEventListener('click', () => {
   stopCamera();
   currentSource = undefined;
   lastPredictions = [];
+  resultFrame.width = 0;
+  $('#capture').disabled = true;
   video.hidden = photo.hidden = canvas.hidden = true;
   photo.removeAttribute('src');
   $('#empty-state').hidden = false;
@@ -288,3 +362,4 @@ $('#clear').addEventListener('click', () => {
   message('Ready when you are. Start your camera or upload an image.');
 });
 window.addEventListener('pagehide', stopCamera);
+document.addEventListener('visibilitychange', () => { frameTimes = []; $('#fps').textContent = '—'; });
