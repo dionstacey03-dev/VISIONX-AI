@@ -2,29 +2,52 @@ import { visibleDetections, summarize } from './detections.js';
 import './style.css';
 
 document.querySelector('#app').innerHTML = `
-  <header class="topbar"><a class="brand" href="/" aria-label="VISIONX-AI home"><span class="brand-icon">◈</span> VISIONX<span class="muted"> / AI</span></a><span class="privacy"><span class="dot"></span> On-device intelligence</span></header>
-  <main>
-    <div class="intro"><div><p class="eyebrow">COMPUTER VISION WORKSPACE</p><h1>See it. <span>Identify it.</span></h1><p class="subtitle">Understand the world in front of your camera, in real time.</p></div><span class="model-tag">COCO-SSD <span>· 80 object classes</span></span></div>
-    <div class="workspace">
+  <header class="topbar">
+    <a class="brand" href="/" aria-label="VISIONX-AI home"><span class="brand-mark">V<span>X</span></span><span class="brand-name">VISIONX<span class="brand-muted">.AI</span><small>VISION INTELLIGENCE STUDIO</small></span></a>
+    <div class="topbar-center"><span class="topbar-pulse"></span> PRIVATE IN-BROWSER PROCESSING <span class="topbar-divider">/</span> COCO-SSD ENGINE</div>
+    <div class="topbar-right"><span class="system-status"><i class="dot"></i> SYSTEM READY</span><span class="version-pill">V 2.0</span></div>
+  </header>
+  <main class="app-shell">
+    <section class="hero">
+      <div class="hero-copy"><p class="eyebrow"><span class="eyebrow-line"></span> COMPUTER VISION / WORKSPACE 01</p><h1>Give your world<br /><span>a second look.</span></h1><p class="subtitle">An intelligent lens for the objects around you. Scan live or drop in an image — recognition happens privately on your device.</p></div>
+      <div class="hero-side"><div class="engine-card"><span class="engine-orbit">✳</span><div><small>ACTIVE MODEL</small><strong>COCO-SSD</strong><span>80 object categories · TensorFlow.js</span></div><span class="engine-ready">READY</span></div><div class="hero-caption">01 <span>—</span> SEE MORE. KNOW MORE.</div></div>
+    </section>
+    <section class="workspace" aria-label="Object detection workspace">
       <section class="viewer-panel" aria-label="Object detection viewer">
-        <div class="panel-top"><span><span class="dot" id="live-dot"></span> <span id="source-label">LIVE VIEW</span></span><span id="status-chip">STANDBY</span></div>
+        <div class="panel-top"><div class="panel-title"><span class="panel-index">01</span><div><strong>VISION FEED</strong><small>LIVE DETECTION CANVAS</small></div></div><div class="viewer-status"><span class="dot" id="live-dot"></span><span id="source-label">AWAITING INPUT</span><span class="status-chip" id="status-chip">STANDBY</span></div></div>
         <div id="viewport" class="viewport">
           <video id="video" playsinline muted hidden></video><img id="photo" alt="Uploaded image for object identification" hidden /><canvas id="overlay" aria-label="Object bounding boxes" hidden></canvas>
-          <div id="empty-state"><div class="view-icon">⌖</div><h2>A new perspective awaits</h2><p>Start your camera or upload an image<br />to discover the objects around you.</p><span class="frame-corner corner-tl"></span><span class="frame-corner corner-tr"></span><span class="frame-corner corner-bl"></span><span class="frame-corner corner-br"></span></div>
-          <span id="viewport-badge" hidden>LOCAL INFERENCE</span>
+          <div id="empty-state"><div class="scan-graphic"><span class="scan-ring ring-one"></span><span class="scan-ring ring-two"></span><span class="scan-crosshair">⌖</span><span class="scan-spark spark-one"></span><span class="scan-spark spark-two"></span></div><p class="empty-kicker">YOUR VISION STARTS HERE</p><h2>Bring something into focus.</h2><p class="empty-description">Start your camera or upload an image<br />to reveal the objects hiding in plain sight.</p><span class="frame-corner corner-tl"></span><span class="frame-corner corner-tr"></span><span class="frame-corner corner-bl"></span><span class="frame-corner corner-br"></span><span class="viewport-coordinate coord-left">VX / 001</span><span class="viewport-coordinate coord-right">AI VISION SYSTEM</span></div>
+          <span id="viewport-badge" hidden>● LOCAL INFERENCE</span>
         </div>
-        <div class="controls"><button id="camera" class="primary">◉ <span>Start camera</span></button><button id="upload" class="secondary">↑ Upload image</button><button id="capture" class="secondary" disabled>↓ Save snapshot</button><input id="file" type="file" accept="image/*" hidden /><button id="clear" class="text-button" disabled>Clear</button><span class="control-note">Your images stay on your device</span></div>
-        <div id="message" role="status" aria-live="polite">Ready when you are. Camera access requires HTTPS or localhost.</div>
-        <button id="retry" class="text-button" hidden>Retry model loading</button>
+        <div class="viewer-toolbar"><div class="toolbar-actions"><button id="camera" class="primary"><span class="button-icon">◉</span><span>Start camera</span></button><button id="upload" class="secondary"><span class="button-icon">↥</span> Upload image</button><button id="capture" class="secondary snapshot-button" disabled><span class="button-icon">↧</span> Save snapshot</button><input id="file" type="file" accept="image/*" hidden /><button id="clear" class="text-button" disabled>Reset view</button></div><div class="privacy-note"><span class="privacy-lock">⌑</span> 100% ON-DEVICE</div></div>
+        <div class="viewer-feedback"><span class="feedback-pulse"></span><span id="message" role="status" aria-live="polite">Ready when you are. Camera access requires HTTPS or localhost.</span><button id="retry" class="text-button retry-button" hidden>Retry model loading ↗</button></div>
       </section>
       <aside class="inspector">
-        <section class="results-panel"><div class="section-heading"><h2>Detected objects</h2><span id="count">0</span></div><p class="section-note">What your camera sees, at a glance.</p><div id="results"><div class="no-results"><span>◎</span><p>No objects identified yet</p><small>Results will appear here as you scan.</small></div></div></section>
-        <section class="settings-panel"><p class="eyebrow">DETECTION SETTINGS</p><label for="threshold">Confidence threshold <output id="threshold-value">50%</output></label><input id="threshold" type="range" min="20" max="95" value="50" step="5" /><div class="range-labels"><span>More detections</span><span>Higher certainty</span></div><div class="stats"><div><span>Inference time</span><strong id="latency">—</strong></div><div><span>Processing</span><strong id="backend">On device</strong></div></div></section>
-        <section class="settings-panel"><p class="eyebrow">CAMERA & PERFORMANCE</p><label for="camera-select">Camera</label><select id="camera-select"><option value="">Automatic (prefer rear camera)</option></select><label for="mode">Detection mode</label><select id="mode"><option value="fast">Fast · lower resolution</option><option value="accurate" selected>Accurate · higher resolution</option></select><p class="section-note">Fast uses up to 480 pixels; Accurate uses up to 960. Both use the same model.</p><div class="stats"><div><span>Detection FPS</span><strong id="fps">—</strong></div></div></section>
-        <div class="tip"><span>✦</span><p><strong>A little light goes a long way.</strong><br />Use good lighting and keep objects in frame for clearer results.</p></div>
+        <section class="results-panel">
+          <div class="section-heading"><div><p class="eyebrow">ANALYSIS / 01</p><h2>What we see<span>.</span></h2></div><span class="count-pill"><strong id="count">0</strong><small>FOUND</small></span></div>
+          <p class="section-note">Recognized objects appear here as the vision engine processes your input.</p>
+          <div class="results-divider"><span>OBJECT BREAKDOWN</span><span>CONFIDENCE</span></div>
+          <div id="results"><div class="no-results"><span class="no-results-icon">⌖</span><p>Nothing in frame yet</p><small>Start a scan to populate your results.</small></div></div>
+        </section>
+        <section class="settings-panel">
+          <div class="section-heading compact-heading"><div><p class="eyebrow">TUNING / 02</p><h2>Detection controls<span>.</span></h2></div><span class="settings-glyph">⌘</span></div>
+          <label for="threshold"><span>Confidence threshold</span><output id="threshold-value">50%</output></label>
+          <input id="threshold" type="range" min="20" max="95" value="50" step="5" />
+          <div class="range-labels"><span>More detections</span><span>Higher certainty</span></div>
+          <div class="metric-grid"><div class="metric"><small>INFERENCE TIME</small><strong id="latency">—</strong></div><div class="metric"><small>PROCESSOR</small><strong id="backend">On device</strong></div></div>
+        </section>
+        <section class="settings-panel camera-settings">
+          <div class="section-heading compact-heading"><div><p class="eyebrow">INPUT / 03</p><h2>Capture setup<span>.</span></h2></div><span class="settings-glyph">◉</span></div>
+          <label for="camera-select">Camera source</label><select id="camera-select"><option value="">Automatic (prefer rear camera)</option></select>
+          <label for="mode">Processing profile</label><select id="mode"><option value="fast">Fast · lower resolution</option><option value="accurate" selected>Accurate · higher resolution</option></select>
+          <p class="section-note setting-hint">Fast uses up to 480 pixels; Accurate uses up to 960. Both use the same model.</p>
+          <div class="metric-grid single-metric"><div class="metric"><small>DETECTION FRAME RATE</small><strong id="fps">—</strong></div><div class="metric"><small>MODEL CLASSES</small><strong>80</strong></div></div>
+        </section>
+        <div class="tip"><span class="tip-icon">✳</span><p><strong>Pro tip</strong><br />Good lighting and a steady frame help the model identify objects more accurately.</p></div>
       </aside>
-    </div>
-    <footer><span><span class="dot"></span> Private by design. No image uploads to a server.</span><span>VISIONX-AI <span class="muted"> / </span> REAL-TIME OBJECT IDENTIFICATION</span></footer>
+    </section>
+    <footer><div class="footer-brand"><span class="brand-mark small-mark">V<span>X</span></span><span>VISIONX.AI</span></div><span class="footer-privacy"><i class="dot"></i> Your images never leave this device.</span><span class="footer-meta">BUILT FOR CLARITY <b>·</b> POWERED BY TENSORFLOW.JS</span></footer>
   </main>`;
 
 const $ = (selector) => document.querySelector(selector);
