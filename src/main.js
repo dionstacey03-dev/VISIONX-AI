@@ -39,6 +39,7 @@ let loading;
 let stream;
 let generation = 0;
 let currentSource;
+let photoUrl;
 let lastPredictions = [];
 let busy = false;
 const inferenceCanvas = document.createElement('canvas');
@@ -312,9 +313,10 @@ $('#file').addEventListener('change', async (event) => {
   setBusy(true);
   stopCamera();
   resultFrame.width = 0;
-  const url = URL.createObjectURL(file);
+  if (photoUrl) URL.revokeObjectURL(photoUrl);
+  photoUrl = URL.createObjectURL(file);
   try {
-    photo.src = url;
+    photo.src = photoUrl;
     await photo.decode();
     if (photo.naturalWidth * photo.naturalHeight > 25_000_000) throw new Error('Choose an image smaller than 25 megapixels.');
     lastPredictions = [];
@@ -328,8 +330,6 @@ $('#file').addEventListener('change', async (event) => {
     message(error.name === 'EncodingError' ? 'This image could not be decoded. Choose a JPEG, PNG, or WebP image.' : error.message, true);
     if ($('#retry').hidden) $('#status-chip').textContent = 'ERROR';
   } finally {
-    photo.removeAttribute('src');
-    URL.revokeObjectURL(url);
     setBusy(false);
   }
 });
@@ -354,6 +354,8 @@ $('#clear').addEventListener('click', () => {
   $('#capture').disabled = true;
   video.hidden = photo.hidden = canvas.hidden = true;
   photo.removeAttribute('src');
+  if (photoUrl) URL.revokeObjectURL(photoUrl);
+  photoUrl = undefined;
   $('#empty-state').hidden = false;
   $('#viewport-badge').hidden = true;
   $('#viewport').style.aspectRatio = '';
@@ -365,5 +367,8 @@ $('#clear').addEventListener('click', () => {
   $('#clear').disabled = true;
   message('Ready when you are. Start your camera or upload an image.');
 });
-window.addEventListener('pagehide', stopCamera);
+window.addEventListener('pagehide', () => {
+  stopCamera();
+  if (photoUrl) URL.revokeObjectURL(photoUrl);
+});
 document.addEventListener('visibilitychange', () => { frameTimes = []; $('#fps').textContent = '—'; });
