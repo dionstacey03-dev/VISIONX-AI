@@ -17,7 +17,7 @@ try {
   const page = await context.newPage();
   page.on('pageerror', (error) => errors.push(error.message));
   await page.goto(url);
-  await page.getByRole('heading', { name: 'See it. Identify it.' }).waitFor();
+  await page.getByRole('heading', { name: 'Give your world a second look.' }).waitFor();
   assert.equal(await page.locator('#clear').isDisabled(), true);
   assert.equal(await page.locator('#capture').isDisabled(), true);
   await page.locator('#threshold').fill('75');
@@ -35,7 +35,7 @@ try {
   const imageFile = { name: 'blank.png', mimeType: 'image/png', buffer: Buffer.from(image, 'base64') };
   await page.route('**/models/coco-ssd/model.json', (route) => route.fulfill({ status: 503, body: 'model unavailable' }));
   await page.locator('#file').setInputFiles(imageFile);
-  await page.waitForFunction(() => document.querySelector('#message').textContent.includes('Detection model unavailable'));
+  await page.waitForFunction(() => document.querySelector('#message').textContent.includes('Could not load the local COCO-SSD model'));
   assert.equal(await page.locator('#retry').isVisible(), true);
   assert.equal(await page.locator('#upload').isEnabled(), true);
   assert.equal(await page.locator('#photo').isVisible(), true);
