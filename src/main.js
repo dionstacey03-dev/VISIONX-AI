@@ -1,5 +1,3 @@
-import * as tf from '@tensorflow/tfjs';
-import * as cocoSsd from '@tensorflow-models/coco-ssd';
 import { visibleDetections, summarize } from './detections.js';
 import './style.css';
 
@@ -36,6 +34,8 @@ const canvas = $('#overlay');
 const context = canvas.getContext('2d');
 let model;
 let loading;
+let tf;
+let cocoSsd;
 let stream;
 let generation = 0;
 let currentSource;
@@ -74,6 +74,14 @@ async function loadModel() {
   $('#status-chip').textContent = 'LOADING';
   loading = (async () => {
     try {
+      // Load the machine-learning runtime only when inference is first requested.
+      // This keeps the initial interface bundle small and defers model code until needed.
+      const [tensorflowModule, cocoSsdModule] = await Promise.all([
+        import('@tensorflow/tfjs'),
+        import('@tensorflow-models/coco-ssd'),
+      ]);
+      tf = tensorflowModule;
+      cocoSsd = cocoSsdModule;
       let webgl = false;
       try { webgl = await tf.setBackend('webgl'); } catch { /* CPU fallback below */ }
       if (!webgl) await tf.setBackend('cpu');
