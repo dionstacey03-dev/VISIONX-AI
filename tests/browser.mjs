@@ -39,8 +39,10 @@ try {
   assert.equal(await page.locator('#retry').isVisible(), true);
   assert.equal(await page.locator('#upload').isEnabled(), true);
   assert.equal(await page.locator('#photo').isVisible(), true);
+  assert.equal(await page.locator('#photo').evaluate((image) => image.naturalWidth > 0 && image.naturalHeight > 0), true);
+  assert.match(await page.locator('#photo').getAttribute('src'), /^blob:/);
   assert.equal(await page.locator('#capture').isDisabled(), true);
-  console.log('PASS: image upload, clear error, and retry control when model cannot load'); passed++;
+  console.log('PASS: image remains decoded and available for retry after model-load failure'); passed++;
 
   if (modelAvailable) {
     await page.unroute('**/models/coco-ssd/model.json');
@@ -123,6 +125,7 @@ try {
   assert.equal(await page.locator('#count').textContent(), '0');
   assert.equal(await page.locator('#clear').isDisabled(), true);
   assert.equal(await page.locator('#capture').isDisabled(), true);
+  assert.equal(await page.locator('#photo').getAttribute('src'), null);
   await page.locator('#file').setInputFiles({ name: 'broken.png', mimeType: 'image/png', buffer: Buffer.from('invalid image') });
   await page.waitForFunction(() => document.querySelector('#message').textContent.includes('could not be decoded'));
   console.log('PASS: clear/reset and invalid-image handling'); passed++;
