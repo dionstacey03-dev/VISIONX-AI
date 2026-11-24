@@ -1,7 +1,7 @@
 import { visibleDetections, summarize } from './detections.js';
 import './style.css';
 
-document.querySelector('#app').innerHTML = \`
+document.querySelector('#app').innerHTML = `
   <header class="topbar">
     <a class="brand" href="/" aria-label="VISIONX-AI home"><span class="brand-mark">V<span>X</span></span><span class="brand-name">VISIONX<span class="brand-muted">.AI</span><small>VISION INTELLIGENCE STUDIO</small></span></a>
     <div class="topbar-center"><span class="topbar-pulse"></span> PRIVATE IN-BROWSER PROCESSING <span class="topbar-divider">/</span> COCO-SSD ENGINE</div>
@@ -48,7 +48,7 @@ document.querySelector('#app').innerHTML = \`
       </aside>
     </section>
     <footer><div class="footer-brand"><span class="brand-mark small-mark">V<span>X</span></span><span>VISIONX.AI</span></div><span class="footer-privacy"><i class="dot"></i> Your images never leave this device.</span><span class="footer-meta">BUILT FOR CLARITY <b>·</b> POWERED BY TENSORFLOW.JS</span></footer>
-  </main>\`;
+  </main>`;
 
 const $ = (selector) => document.querySelector(selector);
 const video = $('#video');
