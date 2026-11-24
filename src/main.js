@@ -20,7 +20,7 @@ document.querySelector('#app').innerHTML = `
           <div id="empty-state"><div class="scan-graphic"><span class="scan-ring ring-one"></span><span class="scan-ring ring-two"></span><span class="scan-crosshair">⌖</span><span class="scan-spark spark-one"></span><span class="scan-spark spark-two"></span></div><p class="empty-kicker">YOUR VISION STARTS HERE</p><h2>Bring something into focus.</h2><p class="empty-description">Start your camera or upload an image<br />to reveal the objects hiding in plain sight.</p><span class="frame-corner corner-tl"></span><span class="frame-corner corner-tr"></span><span class="frame-corner corner-bl"></span><span class="frame-corner corner-br"></span><span class="viewport-coordinate coord-left">VX / 001</span><span class="viewport-coordinate coord-right">AI VISION SYSTEM</span></div>
           <span id="viewport-badge" hidden>● LOCAL INFERENCE</span>
         </div>
-        <div class="viewer-toolbar"><div class="toolbar-actions"><button id="camera" class="primary"><span class="button-icon">◉</span><span>Start camera</span></button><button id="upload" class="secondary"><span class="button-icon">↥</span> Upload image</button><button id="capture" class="secondary snapshot-button" disabled><span class="button-icon">↧</span> Save snapshot</button><input id="file" type="file" accept="image/*" hidden /><button id="clear" class="text-button" disabled>Reset view</button></div><div class="privacy-note"><span class="privacy-lock">⌑</span> 100% ON-DEVICE</div></div>
+        <div class="viewer-toolbar"><div class="toolbar-actions"><button id="camera" class="primary"><span class="button-icon">◉</span><span class="camera-label">Start camera</span></button><button id="upload" class="secondary"><span class="button-icon">↥</span> Upload image</button><button id="capture" class="secondary snapshot-button" disabled><span class="button-icon">↧</span> Save snapshot</button><input id="file" type="file" accept="image/*" hidden /><button id="clear" class="text-button" disabled>Reset view</button></div><div class="privacy-note"><span class="privacy-lock">⌑</span> 100% ON-DEVICE</div></div>
         <div class="viewer-feedback"><span class="feedback-pulse"></span><span id="message" role="status" aria-live="polite">Ready when you are. Camera access requires HTTPS or localhost.</span><button id="retry" class="text-button retry-button" hidden>Retry model loading ↗</button></div>
       </section>
       <aside class="inspector">
@@ -116,7 +116,7 @@ async function loadModel() {
     } catch (error) {
       $('#retry').hidden = false;
       $('#status-chip').textContent = 'MODEL UNAVAILABLE';
-      throw new Error('Detection model unavailable. Run npm run model:download, then retry. Check network access to storage.googleapis.com.');
+      throw new Error(`Could not load the local COCO-SSD model (${error.message || 'unknown error'}). The deployment must include public/models/coco-ssd/model.json and its weight shards. Refresh the page and retry; if this keeps happening, contact the site owner.`);
     } finally { loading = undefined; }
   })();
   return loading;
@@ -138,7 +138,7 @@ function stopCamera() {
   stream?.getTracks().forEach((track) => track.stop());
   stream = undefined;
   video.srcObject = null;
-  $('#camera span').textContent = 'Start camera';
+  $('#camera .camera-label').textContent = 'Start camera';
   $('#live-dot').classList.remove('active');
   frameTimes = [];
   $('#fps').textContent = '—';
@@ -272,7 +272,7 @@ async function startCamera() {
     lastPredictions = [];
     showSource(video);
     $('#latency').textContent = '—';
-    $('#camera span').textContent = 'Stop camera';
+    $('#camera .camera-label').textContent = 'Stop camera';
     $('#live-dot').classList.add('active');
     $('#status-chip').textContent = 'LIVE';
     message('Camera active. Identifying objects on your device.');
