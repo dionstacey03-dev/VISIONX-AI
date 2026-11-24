@@ -327,7 +327,11 @@ $('#file').addEventListener('change', async (event) => {
   } catch (error) {
     message(error.name === 'EncodingError' ? 'This image could not be decoded. Choose a JPEG, PNG, or WebP image.' : error.message, true);
     if ($('#retry').hidden) $('#status-chip').textContent = 'ERROR';
-  } finally { URL.revokeObjectURL(url); setBusy(false); }
+  } finally {
+    photo.removeAttribute('src');
+    URL.revokeObjectURL(url);
+    setBusy(false);
+  }
 });
 
 $('#retry').addEventListener('click', async () => {
